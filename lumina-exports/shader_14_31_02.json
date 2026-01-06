@@ -1,0 +1,40 @@
+{
+  "name": "Shader-14:31:02",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// Parameters defined in the JSON\nuniform float u_speed;\nuniform float u_camera_dist;\nuniform float u_fov;\nuniform float u_glow_intensity;\n\nout vec4 fragColor;\n\n// --- UTILS ---\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\n// Smooth Minimum for organic blending\nfloat smin(float a, float b, float k) {\n    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);\n    return mix(b, a, h) - k * h * (1.0 - h);\n}\n\n// --- SHAPES ---\n// A twisted \"Infinity Bowtie\" based on a modified torus\nfloat sdInfinityBowtie(vec3 p) {\n    float t = iTime * u_speed * 0.5;\n    \n    // Twist the space\n    p.xz *= rot(p.y * 0.5 + t);\n    \n    // Lemniscate-inspired transformation\n    float angle = atan(p.x, p.z);\n    float dist = length(p.xz);\n    \n    // Pinched radius to create the bowtie effect\n    float r1 = 2.5; \n    float r2 = 0.4 + 0.3 * cos(angle * 2.0); // The \"pinch\"\n    \n    // Add vertical oscillation\n    p.y += sin(angle * 2.0 + t) * 0.5;\n    \n    vec2 q = vec2(dist - r1, p.y);\n    return length(q) - r2;\n}\n\n// Scene Map\nfloat map(vec3 p) {\n    // Subtle world distortion\n    float d = sdInfinityBowtie(p);\n    \n    // Add some \"inner\" filaments for complexity\n    float d2 = sdInfinityBowtie(p * 1.5) / 1.5;\n    return smin(d, d2, 0.5);\n}\n\n// Color Palette\nvec3 getPalette(float t) {\n    vec3 a = vec3(0.5, 0.5, 0.5);\n    vec3 b = vec3(0.5, 0.5, 0.5);\n    vec3 c = vec3(1.0, 1.0, 1.0);\n    vec3 d = vec3(0.263, 0.416, 0.557);\n    return a + b * cos(6.28318 * (c * t + d + iTime * 0.1));\n}\n\nvoid main() {\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    float time = iTime * u_speed;\n    \n    // 1. CAMERA SYSTEM (Parallel Rail)\n    float angle = time * 0.2;\n    vec3 ro = vec3(sin(angle) * u_camera_dist, cos(angle * 0.5) * 2.0, cos(angle) * u_camera_dist);\n    vec3 ta = vec3(0.0, 0.0, 0.0);\n    \n    vec3 f = normalize(ta - ro);\n    vec3 r = normalize(cross(vec3(0, 1, 0), f));\n    vec3 u = cross(f, r);\n    vec3 rd = normalize(f * u_fov + uv.x * r + uv.y * u);\n    \n    // 2. RAYMARCHING\n    float t = 0.0;\n    float glow = 0.0;\n    float d = 0.0;\n    vec3 p;\n    \n    for(int i = 0; i < 80; i++) {\n        p = ro + rd * t;\n        d = map(p);\n        \n        // Accumulate glow based on proximity to surface\n        glow += 0.05 / (0.1 + abs(d));\n        \n        if(abs(d) < 0.001 || t > 30.0) break;\n        t += d * 0.8; // Relaxed step for smoother gradients\n    }\n    \n    // 3. COLORING & FADING\n    vec3 col = vec3(0.0);\n    \n    // Background Gradient\n    col = mix(vec3(0.01, 0.02, 0.05), vec3(0.0), length(uv));\n    \n    if(t < 30.0) {\n        // Calculate Normal for shading\n        vec2 e = vec2(0.01, 0.0);\n        vec3 n = normalize(vec3(\n            map(p + e.xyy) - map(p - e.xyy),\n            map(p + e.yxy) - map(p - e.yxy),\n            map(p + e.yyx) - map(p - e.yyx)\n        ));\n        \n        float diff = max(dot(n, normalize(vec3(1, 2, 3))), 0.0);\n        float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 4.0);\n        \n        vec3 baseCol = getPalette(p.y * 0.2 + time * 0.1);\n        col = baseCol * diff;\n        col += fresnel * baseCol * 2.0;\n    }\n    \n    // Apply smooth glow and volumetric fade\n    vec3 glowCol = getPalette(time * 0.05) * glow * u_glow_intensity;\n    col += glowCol * 0.1;\n    \n    // Atmosphere / Distance Fade\n    col = mix(col, vec3(0.0, 0.01, 0.02), 1.0 - exp(-0.05 * t));\n    \n    // Contrast and Gamma Correction\n    col = pow(col, vec3(0.8));\n    col *= 1.2;\n    \n    fragColor = vec4(col, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Animation Speed",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 3
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Camera Distance",
+      "type": "float",
+      "default": 8,
+      "min": 4,
+      "max": 15
+    },
+    {
+      "name": "u_fov",
+      "label": "FOV",
+      "type": "float",
+      "default": 1.5,
+      "min": 0.5,
+      "max": 3
+    },
+    {
+      "name": "u_glow_intensity",
+      "label": "Glow Brightness",
+      "type": "float",
+      "default": 0.4,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "textureUrl": null
+}
