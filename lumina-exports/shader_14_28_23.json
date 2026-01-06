@@ -1,0 +1,40 @@
+{
+  "name": "Shader-14:28:23",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// User Parameters\nuniform float u_speed;\nuniform float u_fov;\nuniform float u_camera_dist;\nuniform float u_glow_intensity;\n\nout vec4 fragColor;\n\n// --- UTILS ---\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\n// Smooth Minimum for organic blending\nfloat smin(float a, float b, float k) {\n    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);\n    return mix(b, a, h) - k * h * (1.0 - h);\n}\n\n// Path for the \"Universe\" to follow\nvec2 getPath(float z) {\n    return vec2(\n        sin(z * 0.15) * 3.0 + cos(z * 0.08) * 2.0,\n        cos(z * 0.12) * 2.5\n    );\n}\n\n// Palette function for smooth gradients\nvec3 getPalette(float t) {\n    vec3 a = vec3(0.5, 0.5, 0.5);\n    vec3 b = vec3(0.5, 0.5, 0.5);\n    vec3 c = vec3(1.0, 1.0, 1.0);\n    vec3 d = vec3(0.0, 0.33, 0.67);\n    return a + b * cos(6.28318 * (c * t + d));\n}\n\n// --- MAP / SDF ---\nfloat map(vec3 p) {\n    // 1. Center the universe around the path\n    p.xy -= getPath(p.z);\n    \n    // 2. Twist and Repeat\n    float z_rot = p.z * 0.1;\n    p.xy *= rot(z_rot);\n    \n    // 3. Domain Repetition for \"Infinity\"\n    vec3 q = p;\n    float cell_z = 4.0;\n    q.z = mod(q.z, cell_z) - cell_z * 0.5;\n    \n    // 4. Geometry: Recursive \"Smooth\" Rings and Bars\n    float d = 1e10;\n    \n    // Central core\n    float core = length(q.xy) - 0.2;\n    \n    // Rotating orbiters\n    for(float i = 0.0; i < 3.0; i++) {\n        vec3 p_i = q;\n        float angle = i * 2.094 + iTime * 0.5;\n        p_i.xy *= rot(angle);\n        p_i.x -= 1.8 + sin(iTime + i * 1.5) * 0.5;\n        \n        float ring = length(p_i.xz) - 0.15;\n        float bars = length(p_i.xy) - 0.05;\n        \n        d = smin(d, ring, 0.5);\n        d = smin(d, bars, 0.4);\n    }\n    \n    return smin(d, core, 0.8);\n}\n\nvoid main() {\n    // Correct Aspect Ratio\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    \n    // 1. Setup Time and Motion\n    float t = iTime * u_speed;\n    \n    // 2. Parallel Rail Camera System\n    // Calculate path position\n    vec3 pathPos = vec3(0.0, 0.0, t);\n    pathPos.xy += getPath(pathPos.z);\n    \n    // Rail offset (Camera orbits the center path)\n    float railRot = t * 0.1;\n    vec2 railVec = vec2(cos(railRot), sin(railRot)) * u_camera_dist;\n    \n    // Position camera on the rail\n    vec3 ro = pathPos;\n    ro.xy += railVec;\n    \n    // Target is ahead on the rail, looking slightly inward\n    vec3 ta = vec3(0.0, 0.0, t + 10.0);\n    ta.xy += getPath(ta.z) + railVec * 0.7; \n    \n    // Camera Matrix\n    vec3 cw = normalize(ta - ro);\n    vec3 cu = normalize(cross(cw, vec3(0.0, 1.0, 0.0)));\n    vec3 cv = normalize(cross(cu, cw));\n    vec3 rd = normalize(uv.x * cu + uv.y * cv + cw * u_fov);\n    \n    // 3. Raymarching Loop\n    float dTotal = 0.0;\n    float glow = 0.0;\n    float dist = 0.0;\n    vec3 col = vec3(0.0);\n    \n    for(int i = 0; i < 100; i++) {\n        vec3 p = ro + rd * dTotal;\n        dist = map(p);\n        \n        if(dist < 0.001 || dTotal > 60.0) break;\n        \n        // Accumulate smooth glow based on proximity\n        glow += exp(-dist * 1.5) * u_glow_intensity;\n        \n        dTotal += dist * 0.7; // Relaxed step for smoother edges\n    }\n    \n    // 4. Coloring & Shading\n    vec3 sceneCol = getPalette(dTotal * 0.05 + iTime * 0.1);\n    \n    // Distance-based lighting / Fog\n    float fog = 1.0 - exp(-dTotal * 0.04);\n    vec3 fogCol = vec3(0.02, 0.01, 0.05); // Deep space background\n    \n    // Base surface color\n    col = sceneCol * (1.0 - fog);\n    \n    // Add glowing volumetric light\n    vec3 glowCol = getPalette(iTime * 0.2);\n    col += glowCol * glow * 0.15;\n    \n    // Mix with background fog\n    col = mix(col, fogCol, fog);\n    \n    // 5. Post Processing\n    col = pow(col, vec3(0.4545)); // Gamma correction\n    col *= 1.2 - dot(uv, uv) * 0.5; // Subtle vignette\n    \n    fragColor = vec4(col, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Fly Speed",
+      "type": "float",
+      "default": 3,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_fov",
+      "label": "Field of View",
+      "type": "float",
+      "default": 1.2,
+      "min": 0.5,
+      "max": 2.5
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Orbit Distance",
+      "type": "float",
+      "default": 8,
+      "min": 3,
+      "max": 15
+    },
+    {
+      "name": "u_glow_intensity",
+      "label": "Glow Power",
+      "type": "float",
+      "default": 0.4,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "textureUrl": null
+}
