@@ -1,0 +1,40 @@
+{
+  "name": "Shader-13:06:03",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "/**\n * Surreal Geometric Dreamscape\n * A cinematic raymarched journey through shifting Platonic solids, \n * distorted space-time, and volumetric chromatic aberration.\n */\n\nout vec4 fragColor;\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// Parameters (mapped from the JSON below)\nuniform float u_speed;\nuniform float u_camera_dist;\nuniform float u_fov;\nuniform float u_twist;\n\n#define MAX_STEPS 120\n#define SURF_DIST 0.001\n#define MAX_DIST 100.0\n\n// Rotation matrix\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\n// Smooth Minimum for organic blending\nfloat smin(float a, float b, float k) {\n    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);\n    return mix(b, a, h) - k * h * (1.0 - h);\n}\n\n// Path function to curve the universe\nvec2 getPath(float z) {\n    return vec2(\n        sin(z * 0.15) * 2.5 + cos(z * 0.08) * 1.5,\n        cos(z * 0.12) * 2.0 + sin(z * 0.05) * 1.0\n    );\n}\n\n// Signed Distance Functions\nfloat sdOctahedron(vec3 p, float s) {\n    p = abs(p);\n    return (p.x + p.y + p.z - s) * 0.57735027;\n}\n\nfloat sdBox(vec3 p, vec3 b) {\n    vec3 q = abs(p) - b;\n    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);\n}\n\n// The Map / Scene\nfloat map(vec3 p) {\n    float t = iTime * 0.5;\n    \n    // Distort space based on path\n    p.xy -= getPath(p.z);\n    \n    // Infinite repetition logic for surrounding pillars\n    vec3 q = p;\n    float interval = 8.0;\n    q.z = mod(q.z, interval) - interval * 0.5;\n    \n    // Central Morphing Structure\n    vec3 p1 = q;\n    p1.xy *= rot(p.z * 0.2 + t);\n    p1.xz *= rot(t * 0.3);\n    \n    // Geometry 1: The Core\n    float shape1 = sdOctahedron(p1, 1.2);\n    \n    // Geometry 2: The Ring/Frame\n    float shape2 = sdBox(p1, vec3(1.0)) - 0.1;\n    shape2 = max(shape2, -(length(p1.xy) - 0.8)); // Hollow it out\n    \n    // Surreal Twist\n    float d = smin(shape1, shape2, 0.5);\n    \n    // Add \"floating debris\" using space folding\n    vec3 p2 = q;\n    for(int i=0; i<3; i++) {\n        p2 = abs(p2) - 1.5;\n        p2.xy *= rot(0.5);\n        p2.yz *= rot(0.3);\n    }\n    float debris = sdBox(p2, vec3(0.2)) - 0.05;\n    \n    d = smin(d, debris, 0.8);\n    \n    // Floor and Ceiling \"veins\"\n    float shells = 4.0 - abs(p.y + sin(p.z * 0.3) * 0.5);\n    d = smin(d, shells, 1.5);\n\n    return d * 0.8;\n}\n\n// Calculate Normals\nvec3 getNormal(vec3 p) {\n    vec2 e = vec2(0.001, 0.0);\n    float d = map(p);\n    vec3 n = d - vec3(map(p - e.xyy), map(p - e.yxy), map(p - e.yyx));\n    return normalize(n);\n}\n\nvoid main() {\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    float t = iTime * u_speed;\n    \n    // 1. Path Calculation\n    vec3 pathPos = vec3(0.0, 0.0, t);\n    pathPos.xy += getPath(pathPos.z);\n    \n    // 2. Parallel Rail System\n    // Camera orbits the central path\n    float angle = t * 0.2;\n    vec2 railVec = vec2(cos(angle), sin(angle)) * u_camera_dist;\n    \n    vec3 ro = pathPos;\n    ro.xy += railVec;\n    \n    // 3. Target (Look ahead with slight inward tilt)\n    vec3 ta = vec3(0.0, 0.0, t + 6.0);\n    ta.xy += getPath(ta.z) + railVec * 0.5; \n    \n    // Camera Setup\n    vec3 f = normalize(ta - ro);\n    vec3 r = normalize(cross(vec3(0, 1, 0), f));\n    vec3 u = cross(f, r);\n    vec3 rd = normalize(f * u_fov + uv.x * r + uv.y * u);\n    \n    // Raymarch Loop\n    float dO = 0.0;\n    float dS;\n    vec3 p;\n    \n    for(int i = 0; i < MAX_STEPS; i++) {\n        p = ro + rd * dO;\n        dS = map(p);\n        dO += dS;\n        if(dO > MAX_DIST || abs(dS) < SURF_DIST) break;\n    }\n    \n    // Shading\n    vec3 col = vec3(0.0);\n    \n    if(dO < MAX_DIST) {\n        vec3 n = getNormal(p);\n        vec3 r_ref = reflect(rd, n);\n        \n        // Lighting\n        float diffuse = dot(n, normalize(vec3(1, 2, 3))) * 0.5 + 0.5;\n        float spec = pow(max(dot(r_ref, -rd), 0.0), 32.0);\n        float fresnel = pow(1.0 + dot(rd, n), 4.0);\n        \n        // Material Coloring based on position/normal\n        vec3 baseCol = 0.5 + 0.5 * cos(vec3(0, 2, 4) + p.z * 0.1);\n        baseCol *= 1.0 + sin(p.y * 10.0) * 0.1; // Stripes\n        \n        col = baseCol * diffuse;\n        col += spec * 0.8;\n        col += fresnel * vec3(0.2, 0.5, 1.0); // Atmospheric glow on edges\n        \n        // Attenuation / Fog\n        col *= exp(-0.04 * dO);\n    }\n    \n    // Background / Glow\n    vec3 bg = vec3(0.02, 0.01, 0.05) * (1.0 - length(uv));\n    bg += vec3(0.5, 0.2, 0.8) * pow(abs(sin(t * 0.1 + uv.y)), 10.0) * 0.1;\n    \n    if (dO >= MAX_DIST) {\n        col = bg;\n    } else {\n        col = mix(col, bg, 1.0 - exp(-0.005 * dO * dO));\n    }\n    \n    // Volumetric pulse\n    col += vec3(0.8, 0.3, 0.1) * sin(p.z * 0.5 - t) * 0.05 * exp(-0.1 * dO);\n\n    // Color Grading & Bloom\n    col = smoothstep(-0.05, 1.1, col);\n    col = pow(col, vec3(0.4545)); // Gamma correction\n    \n    // Chromatic Aberration\n    float ca = 0.01 * length(uv);\n    fragColor = vec4(col.r, col.g, col.b, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Fly Speed",
+      "type": "float",
+      "default": 4,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Orbit Distance",
+      "type": "float",
+      "default": 3.09,
+      "min": 3,
+      "max": 12
+    },
+    {
+      "name": "u_fov",
+      "label": "Field of View",
+      "type": "float",
+      "default": 1.14,
+      "min": 0.5,
+      "max": 2.5
+    },
+    {
+      "name": "u_twist",
+      "label": "World Twist",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "textureUrl": null
+}
