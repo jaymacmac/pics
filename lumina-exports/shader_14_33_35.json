@@ -1,0 +1,40 @@
+{
+  "name": "Shader-14:33:35",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// User Parameters (Uniforms passed by Three.js)\nuniform float u_speed;\nuniform float u_camera_dist;\nuniform float u_fov;\nuniform float u_complexity;\n\nout vec4 fragColor;\n\n// --- UTILS ---\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\nfloat smin(float a, float b, float k) {\n    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);\n    return mix(b, a, h) - k * h * (1.0 - h);\n}\n\n// Global Path for the \"Infinity\" movement\nvec2 getPath(float z) {\n    return vec2(sin(z * 0.2) * 2.5, cos(z * 0.15) * 1.5);\n}\n\n// --- SDF FUNCTIONS ---\n// The \"Bowtie\" is essentially a twisted cylinder or a pair of cones\nfloat sdBowtie(vec3 p, float twist) {\n    p.xy *= rot(p.z * twist + iTime * 0.5);\n    \n    // Create the \"Double Cone / Bowtie\" shape\n    float r = abs(p.z) * 0.4 + 0.15;\n    float d1 = length(p.xy) - r;\n    \n    // Add \"Tie\" details / ridges\n    float angle = atan(p.y, p.x);\n    d1 += sin(angle * 5.0 + p.z * 2.0) * 0.05;\n    \n    // Cap the length\n    float d2 = abs(p.z) - 3.5;\n    return max(d1, d2);\n}\n\nfloat map(vec3 p) {\n    // 1. Follow the path\n    p.xy -= getPath(p.z);\n    \n    // 2. Local space for the central structure\n    vec3 p1 = p;\n    \n    // Create an \"Infinity Rail\" effect by cloning the bowtie along Z\n    float zStep = 10.0;\n    float zIdx = floor(p1.z / zStep);\n    p1.z = mod(p1.z, zStep) - zStep * 0.5;\n    \n    // The Bowtie structure\n    float bowtie = sdBowtie(p1, 0.8 + sin(zIdx) * 0.3);\n    \n    // Add a central energy core / strand\n    float core = length(p.xy) - 0.05;\n    \n    // \"Strings\" connecting the bowties\n    float strings = length(p.xy + vec2(sin(p.z*0.5), cos(p.z*0.5))*0.4) - 0.02;\n    \n    return smin(bowtie, strings, 0.4);\n}\n\n// --- LIGHTING & RENDERING ---\nvec3 getNormal(vec3 p) {\n    vec2 e = vec2(0.001, 0.0);\n    return normalize(vec3(\n        map(p + e.xyy) - map(p - e.xyy),\n        map(p + e.yxy) - map(p - e.yxy),\n        map(p + e.yyx) - map(p - e.yyx)\n    ));\n}\n\nvoid main() {\n    // 0. Setup Coordinates\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    float t = iTime * u_speed;\n    \n    // 1. Camera System (Parallel Rail Strategy)\n    vec3 pathPos = vec3(0.0, 0.0, t);\n    pathPos.xy += getPath(pathPos.z);\n    \n    // Orbit around the center path\n    float orbitAngle = t * 0.3;\n    vec2 railVec = vec2(cos(orbitAngle), sin(orbitAngle)) * u_camera_dist;\n    \n    vec3 ro = pathPos;\n    ro.xy += railVec;\n    \n    // Target is ahead on the rail\n    vec3 ta = vec3(0.0, 0.0, t + 6.0);\n    ta.xy += getPath(ta.z) + railVec * 0.5; // Look slightly inward\n    \n    // Camera Matrix\n    vec3 fwd = normalize(ta - ro);\n    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));\n    vec3 up = cross(fwd, right);\n    vec3 rd = normalize(fwd * u_fov + uv.x * right + uv.y * up);\n    \n    // 2. Raymarching Loop\n    float d = 0.0;\n    float totalD = 0.0;\n    float glow = 0.0;\n    float minStep = 0.01;\n    \n    for(int i = 0; i < 90; i++) {\n        vec3 p = ro + rd * totalD;\n        d = map(p);\n        \n        // Glow calculation\n        glow += 0.01 / (0.05 + abs(d));\n        \n        if(d < 0.001 || totalD > 40.0) break;\n        totalD += d * 0.7; // Relaxed step for smoother glow\n    }\n    \n    // 3. Shading\n    vec3 col = vec3(0.0);\n    vec3 skyColor = vec3(0.02, 0.01, 0.05) * (1.0 - length(uv));\n    \n    if(totalD < 40.0) {\n        vec3 p = ro + rd * totalD;\n        vec3 n = getNormal(p);\n        vec3 ld = normalize(vec3(1.0, 1.0, -1.0));\n        \n        // Lighting components\n        float diff = max(dot(n, ld), 0.0);\n        float spec = pow(max(dot(reflect(-ld, n), -rd), 0.0), 32.0);\n        float fres = pow(1.0 + dot(n, rd), 4.0);\n        \n        // Dynamic material color based on Z position\n        vec3 objCol = mix(vec3(0.1, 0.4, 0.8), vec3(0.9, 0.2, 0.5), sin(p.z * 0.1) * 0.5 + 0.5);\n        \n        col = objCol * diff;\n        col += spec * 0.8;\n        col += vec3(0.5, 0.8, 1.0) * fres * 0.5;\n        \n        // Fog/Atmosphere\n        col = mix(col, skyColor, 1.0 - exp(-0.02 * totalD));\n    } else {\n        col = skyColor;\n    }\n    \n    // Add additive glow\n    vec3 glowCol = mix(vec3(0.2, 0.5, 1.0), vec3(1.0, 0.2, 0.6), sin(t * 0.5) * 0.5 + 0.5);\n    col += glowCol * glow * 0.15;\n    \n    // Post Processing\n    col = pow(col, vec3(0.4545)); // Gamma correction\n    col *= 1.1 - dot(uv, uv) * 0.4; // Subtle vignette\n    \n    fragColor = vec4(col, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Fly Speed",
+      "type": "float",
+      "default": 4,
+      "min": 0,
+      "max": 15
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Orbit Distance",
+      "type": "float",
+      "default": 5.5,
+      "min": 2,
+      "max": 10
+    },
+    {
+      "name": "u_fov",
+      "label": "Field of View",
+      "type": "float",
+      "default": 1.2,
+      "min": 0.5,
+      "max": 2.5
+    },
+    {
+      "name": "u_complexity",
+      "label": "Complexity",
+      "type": "float",
+      "default": 1,
+      "min": 0.1,
+      "max": 2
+    }
+  ],
+  "textureUrl": null
+}
