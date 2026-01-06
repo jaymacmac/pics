@@ -1,0 +1,48 @@
+{
+  "name": "Shader-14:33:10",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "uniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// Parameters provided by the system\nuniform float u_speed;\nuniform float u_camera_dist;\nuniform float u_fov;\nuniform float u_twist;\nuniform float u_glow_intensity;\n\nout vec4 fragColor;\n\n// --- UTILS ---\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\n// Smooth Minimum for organic blending\nfloat smin(float a, float b, float k) {\n    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);\n    return mix(b, a, h) - k * h * (1.0 - h);\n}\n\n// --- GEOMETRY ---\n// The path the entire universe follows\nvec2 getPath(float z) {\n    return vec2(sin(z * 0.15), cos(z * 0.1)) * 3.5;\n}\n\n// Distance Function for the Infinity Bowtie\nfloat sdInfinityBowtie(vec3 p) {\n    // Apply a twist based on Z position\n    p.xy *= rot(p.z * u_twist + iTime * 0.2);\n    \n    // Convert to polar for the lemniscate profile\n    float angle = atan(p.y, p.x);\n    float r = length(p.xy);\n    \n    // Lemniscate of Bernoulli: r^2 = a^2 * cos(2*theta)\n    // We modify this into a 3D distance field\n    float a = 2.5; \n    float lemni = sqrt(abs(a * a * cos(2.0 * angle + iTime * 0.5)));\n    \n    // Smooth out the center pinch\n    lemni = smin(lemni, 0.5, 0.2);\n    \n    // Define the thickness and the cross-section\n    float d = r - lemni;\n    \n    // Create the \"Bowtie\" longitudinal shape (pinch at z=0)\n    float longitudinal = abs(p.z) - 0.1;\n    float thickness = 0.15 + 0.1 * sin(p.z * 2.0 + iTime);\n    \n    // Return a rounded tube following the lemniscate path\n    return length(vec2(d, p.z * 0.2)) - thickness;\n}\n\nfloat map(vec3 p) {\n    p.xy -= getPath(p.z);\n    \n    // Repeating fractal detail\n    float d = sdInfinityBowtie(p);\n    \n    // Adding secondary \"energy strands\"\n    vec3 p2 = p;\n    p2.xy *= rot(p.z * 0.5);\n    float strands = length(p2.xy + vec2(sin(p.z), cos(p.z)) * 0.8) - 0.02;\n    \n    return smin(d, strands, 0.4);\n}\n\n// --- LIGHTING & RENDERING ---\nvec3 getNormal(vec3 p) {\n    vec2 e = vec2(0.001, 0.0);\n    return normalize(vec3(\n        map(p + e.xyy) - map(p - e.xyy),\n        map(p + e.yxy) - map(p - e.yxy),\n        map(p + e.yyx) - map(p - e.yyx)\n    ));\n}\n\nvoid main() {\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    float t = iTime * u_speed;\n    \n    // 1. Path Position\n    vec3 pathPos = vec3(0.0, 0.0, t);\n    pathPos.xy += getPath(pathPos.z);\n    \n    // 2. Parallel Rail Camera System\n    // The camera orbits the central path while moving forward\n    float railOffset = u_camera_dist;\n    vec2 railVec = vec2(sin(t * 0.2), cos(t * 0.2)) * railOffset;\n    \n    vec3 ro = pathPos;\n    ro.xy += railVec;\n    \n    // Target looks ahead but stays locked to the \"rail\" perspective\n    vec3 ta = vec3(0.0, 0.0, t + 10.0);\n    ta.xy += getPath(ta.z) + railVec * 0.6;\n    \n    // Camera Matrix\n    vec3 fwd = normalize(ta - ro);\n    vec3 right = normalize(cross(vec3(0, 1, 0), fwd));\n    vec3 up = cross(fwd, right);\n    vec3 rd = normalize(fwd * u_fov + uv.x * right + uv.y * up);\n    \n    // 3. Raymarching\n    float d, dist = 0.0;\n    float glow = 0.0;\n    for(int i = 0; i < 100; i++) {\n        vec3 p = ro + rd * dist;\n        d = map(p);\n        if(d < 0.001 || dist > 40.0) break;\n        dist += d * 0.7; // Step slightly shorter for accuracy\n        glow += exp(-d * 4.0); // Accumulate glow based on proximity\n    }\n    \n    // 4. Shading\n    vec3 col = vec3(0.01, 0.02, 0.05); // Deep space background\n    \n    if(dist < 40.0) {\n        vec3 p = ro + rd * dist;\n        vec3 n = getNormal(p);\n        vec3 r = reflect(rd, n);\n        \n        // Base Materials: Iridescent Blue/Purple\n        float diff = max(dot(n, normalize(vec3(1, 2, -1))), 0.0);\n        float spec = pow(max(dot(r, fwd), 0.0), 32.0);\n        float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 5.0);\n        \n        vec3 baseCol = mix(vec4(0.1, 0.4, 0.8, 1.0), vec4(0.8, 0.2, 0.9, 1.0), sin(p.z * 0.5) * 0.5 + 0.5).rgb;\n        col = baseCol * diff + spec + fresnel * vec3(0.5, 0.8, 1.0);\n        \n        // Add \"Energy Pulse\" lines\n        float pulses = smoothstep(0.8, 1.0, sin(p.z * 10.0 - iTime * 10.0));\n        col += pulses * vec3(0.2, 0.6, 1.0);\n    }\n    \n    // 5. Post Processing & Volumetrics\n    // Blueish atmosphere\n    col = mix(col, vec3(0.05, 0.1, 0.2), 1.0 - exp(-0.005 * dist * dist));\n    \n    // Add the accumulated glow\n    vec3 glowColor = mix(vec3(0.1, 0.4, 0.9), vec3(0.8, 0.1, 0.5), sin(iTime) * 0.5 + 0.5);\n    col += glow * 0.04 * glowColor * u_glow_intensity;\n    \n    // Contrast and Tone Mapping\n    col = pow(col, vec3(0.8)); // Gamma correction\n    col *= 1.2 - length(uv) * 0.5; // Vignette\n    \n    fragColor = vec4(col, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Fly Speed",
+      "type": "float",
+      "default": 4,
+      "min": 0,
+      "max": 15
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Rail Distance",
+      "type": "float",
+      "default": 3.54,
+      "min": 3,
+      "max": 12
+    },
+    {
+      "name": "u_fov",
+      "label": "Field of View",
+      "type": "float",
+      "default": 1.76,
+      "min": 0.5,
+      "max": 2.5
+    },
+    {
+      "name": "u_twist",
+      "label": "Structural Twist",
+      "type": "float",
+      "default": -0.54,
+      "min": -1,
+      "max": 1
+    },
+    {
+      "name": "u_glow_intensity",
+      "label": "Glow Power",
+      "type": "float",
+      "default": 1.5,
+      "min": 0,
+      "max": 4
+    }
+  ],
+  "textureUrl": null
+}
