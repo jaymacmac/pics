@@ -1,0 +1,40 @@
+{
+  "name": "Shader-14:35:53",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// User Parameters\nuniform float u_speed;\nuniform float u_complexity;\nuniform float u_transparency;\nuniform float u_glow_intensity;\n\nout vec4 fragColor;\n\n// --- Math Utilities ---\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\nfloat sdSphere(vec3 p, float s) {\n    return length(p) - s;\n}\n\n// Gyroid formula: sin(x)cos(y) + sin(y)cos(z) + sin(z)cos(x)\nfloat gyroid(vec3 p, float scale, float thickness, float bias) {\n    p *= scale;\n    return abs(dot(sin(p), cos(p.yzx)) - bias) / scale - thickness;\n}\n\n// Fractal Tech logic combining gyroids at multiple scales\nfloat map(vec3 p) {\n    // Rotate the whole structure slowly\n    p.xz *= rot(iTime * 0.1 * u_speed);\n    p.xy *= rot(iTime * 0.07 * u_speed);\n    \n    // Base Globe bounding\n    float globe = sdSphere(p, 3.5);\n    \n    // Fractal Gyroid Layers\n    float g1 = gyroid(p, 1.5, 0.05, 0.5);\n    float g2 = gyroid(p + 1.2, 3.2, 0.03, 0.3);\n    float g3 = gyroid(p * 2.1, 6.4, 0.01, 0.1);\n    \n    // Combine layers (Tech Fractal)\n    float tech = max(g1, -g2); // Subtractive patterns\n    tech = min(tech, g2);      // Additive details\n    tech = mix(tech, g3, 0.3); // Micro-details\n    \n    // Mask by the globe sphere\n    return max(globe, tech * u_complexity);\n}\n\n// Normal calculation for lighting\nvec3 getNormal(vec3 p) {\n    vec2 e = vec2(0.01, 0.0);\n    return normalize(vec3(\n        map(p + e.xyy) - map(p - e.xyy),\n        map(p + e.yxy) - map(p - e.yxy),\n        map(p + e.yyx) - map(p - e.yyx)\n    ));\n}\n\nvoid main() {\n    // 1. Correct Aspect Ratio UVs\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    \n    // 2. Camera Setup\n    vec3 ro = vec3(0.0, 0.0, -8.0); // Camera position\n    vec3 ta = vec3(0.0, 0.0, 0.0);  // Look target\n    \n    // Mouse rotation\n    float mx = iMouse.z > 0.0 ? (iMouse.x / iResolution.x - 0.5) * 6.28 : 0.0;\n    float my = iMouse.z > 0.0 ? (iMouse.y / iResolution.y - 0.5) * 3.14 : 0.0;\n    ro.yz *= rot(my);\n    ro.xz *= rot(mx);\n    \n    vec3 f = normalize(ta - ro);\n    vec3 r = normalize(cross(vec3(0, 1, 0), f));\n    vec3 u = cross(f, r);\n    vec3 rd = normalize(f + uv.x * r + uv.y * u);\n\n    // 3. Raymarching\n    float t = 0.0;\n    float glow = 0.0;\n    float dist = 0.0;\n    vec3 p;\n    \n    for(int i = 0; i < 80; i++) {\n        p = ro + rd * t;\n        dist = map(p);\n        \n        // Accumulate glow for transparency effect\n        // The closer the ray passes to a surface, the more glow\n        glow += exp(-dist * 4.0) * u_glow_intensity;\n        \n        if(dist < 0.001 || t > 20.0) break;\n        t += dist * 0.6; // Relaxed step for smoother transparency feel\n    }\n\n    // 4. Shading & Coloring\n    vec3 col = vec3(0.0);\n    \n    if(t < 20.0) {\n        vec3 n = getNormal(p);\n        vec3 l = normalize(vec3(1.0, 1.0, -1.0)); // Light dir\n        \n        // Tech-style Rim Lighting\n        float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);\n        float diff = max(dot(n, l), 0.0);\n        \n        // Base color (Cyan/Blue Tech Scheme)\n        vec3 baseColor = mix(vec3(0.1, 0.4, 0.8), vec3(0.0, 1.0, 0.9), sin(p.z * 0.5 + iTime) * 0.5 + 0.5);\n        \n        col = baseColor * diff;\n        col += vec3(0.5, 0.8, 1.0) * rim * 2.0; // Strong tech rim\n        \n        // Subtle texture from iChannel0\n        vec3 tex = texture(iChannel0, p.xy * 0.1 + p.z * 0.1).rgb;\n        col += tex * 0.1;\n        \n        // Transparency / Alpha simulation\n        float alpha = clamp(u_transparency + rim, 0.0, 1.0);\n        col *= alpha;\n    }\n    \n    // Add procedural background star/grid pulse\n    float bg = pow(clamp(dot(rd, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 10.0) * 0.2;\n    col += vec3(0.05, 0.1, 0.2) * bg;\n    \n    // Apply accumulated glow\n    col += vec3(0.1, 0.5, 1.0) * glow * 0.02;\n\n    // 5. Post Processing\n    col = pow(col, vec3(0.4545)); // Gamma correction\n    col *= 1.2 - length(uv) * 0.5; // Vignette\n    \n    fragColor = vec4(col, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Rotation Speed",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_complexity",
+      "label": "Fractal Detail",
+      "type": "float",
+      "default": 1.2,
+      "min": 0.5,
+      "max": 3
+    },
+    {
+      "name": "u_transparency",
+      "label": "Transparency",
+      "type": "float",
+      "default": 0.3,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_glow_intensity",
+      "label": "Tech Glow",
+      "type": "float",
+      "default": 1.5,
+      "min": 0,
+      "max": 5
+    }
+  ],
+  "textureUrl": null
+}
