@@ -1,0 +1,105 @@
+{
+  "name": "Shader-1:24:41 PM",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "uniform float iTime;\nuniform vec2 iResolution;\n\n// 12 Stabilized Parameters\nuniform float u_speed;          // Default: 0.8\nuniform float u_height_offset;  // Default: 1.2\nuniform float u_terrain_scale;  // Default: 0.4\nuniform float u_fog_dist;       // Default: 0.12\nuniform float u_sun_intensity;  // Default: 1.5\nuniform float u_color_warmth;   // Default: 1.1\nuniform float u_horizon_lock;   // Default: 0.0 (Adjusts vertical look)\nuniform float u_shake_amount;   // Default: 0.02\nuniform float u_detail_level;   // Default: 6.0\nuniform float u_crater_depth;   // Default: 0.4\nuniform float u_texture_freq;   // Default: 0.3\nuniform float u_fov_zoom;       // Default: 1.5\n\nout vec4 fragColor;\n\n// --- SIMPLE STABLE NOISE ---\nfloat hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n\nfloat noise(vec2 p) {\n    vec2 i = floor(p); vec2 f = fract(p);\n    vec2 u = f*f*(3.0-2.0*f);\n    return mix(mix(hash(i + vec2(0,0)), hash(i + vec2(1,0)), u.x),\n               mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), u.x), u.y);\n}\n\nfloat fbm(vec2 p) {\n    float v = 0.0, a = 0.5;\n    for (int i = 0; i < 6; i++) {\n        v += a * noise(p);\n        p *= 2.0; a *= 0.5;\n    }\n    return v;\n}\n\nfloat map(vec3 p) {\n    float h = fbm(p.xz * u_texture_freq) * 3.0 * u_terrain_scale;\n    return p.y - h;\n}\n\nvoid main() {\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    \n    // --- STABILIZED RAIL CAMERA ---\n    float progress = iTime * u_speed * 5.0;\n    \n    // Camera Position: Moves strictly forward on Z\n    // Slight noise 'shake' instead of banking for realism\n    float shake = noise(vec2(iTime * 10.0)) * u_shake_amount;\n    vec3 ro = vec3(0.0, u_height_offset + shake, progress);\n    \n    // Target: Look straight ahead at a point further down the Z axis\n    vec3 ta = vec3(0.0, u_height_offset + u_horizon_lock, progress + 10.0);\n    \n    // Fixed View Matrix (No Rolling)\n    vec3 fwd = normalize(ta - ro);\n    vec3 right = normalize(cross(vec3(0,1,0), fwd));\n    vec3 up = cross(fwd, right);\n    vec3 rd = normalize(fwd * u_fov_zoom + uv.x * right + uv.y * up);\n\n    // --- RAYMARCHING ---\n    float t_dist = 0.01, d;\n    for(int i = 0; i < 90; i++) {\n        d = map(ro + rd * t_dist);\n        if(d < 0.001 || t_dist > 40.0) break;\n        t_dist += d * 0.6; // Step conservatively for precision\n    }\n\n    // --- MARS COLOR PALETTE ---\n    vec3 skyColor = vec3(0.6, 0.35, 0.25) * u_color_warmth;\n    vec3 marsSoil = vec3(0.45, 0.15, 0.05) * u_color_warmth;\n    vec3 col = skyColor;\n\n    if(t_dist < 40.0) {\n        vec3 p = ro + rd * t_dist;\n        \n        // Calculate Normal for shading\n        vec2 e = vec2(0.02, 0);\n        vec3 n = normalize(vec3(map(p+e.xyy)-map(p-e.xyy), 0.05, map(p+e.yyx)-map(p-e.yyx)));\n        \n        // Lighting\n        float diff = max(dot(n, normalize(vec3(0.5, 0.8, -0.2))), 0.0);\n        col = mix(marsSoil, marsSoil * 1.5, diff) * u_sun_intensity;\n        \n        // Distance Fog (Linear)\n        float fog = smoothstep(40.0, 0.0, t_dist);\n        col = mix(skyColor, col, pow(fog, u_fog_dist * 10.0));\n    }\n\n    // Final Clean Up\n    col = pow(col, vec3(0.4545)); // Gamma correction\n    fragColor = vec4(col, 1.0);\n}\n\n/* CONFIG */\n\n{\n  \"parameters\": [\n    { \"name\": \"u_speed\", \"label\": \"Flyover Velocity\", \"type\": \"float\", \"default\": 0.8, \"min\": 0, \"max\": 2.0 },\n    { \"name\": \"u_height_offset\", \"label\": \"Flight Altitude\", \"type\": \"float\", \"default\": 1.2, \"min\": 0.5, \"max\": 4.0 },\n    { \"name\": \"u_horizon_lock\", \"label\": \"Look Up/Down\", \"type\": \"float\", \"default\": 0.0, \"min\": -1.0, \"max\": 1.0 },\n    { \"name\": \"u_shake_amount\", \"label\": \"Vibration\", \"type\": \"float\", \"default\": 0.02, \"min\": 0, \"max\": 0.2 },\n    { \"name\": \"u_terrain_scale\", \"label\": \"Mountain Height\", \"type\": \"float\", \"default\": 0.4, \"min\": 0.1, \"max\": 1.0 },\n    { \"name\": \"u_fov_zoom\", \"label\": \"Lens Focal Length\", \"type\": \"float\", \"default\": 1.5, \"min\": 0.5, \"max\": 3.0 }\n  ]\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Speed",
+      "type": "float",
+      "default": 0.125,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_height_offset",
+      "label": "Height Offset",
+      "type": "float",
+      "default": 2.75,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_terrain_scale",
+      "label": "Terrain Scale",
+      "type": "float",
+      "default": 1.0405,
+      "min": 0.1,
+      "max": 10
+    },
+    {
+      "name": "u_fog_dist",
+      "label": "Fog Dist",
+      "type": "float",
+      "default": 0.7,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_sun_intensity",
+      "label": "Sun Intensity",
+      "type": "float",
+      "default": 0.575,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_color_warmth",
+      "label": "Color Warmth",
+      "type": "float",
+      "default": 1.1,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_horizon_lock",
+      "label": "Horizon Lock",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_shake_amount",
+      "label": "Shake Amount",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_detail_level",
+      "label": "Detail Level",
+      "type": "float",
+      "default": 0.85,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_crater_depth",
+      "label": "Crater Depth",
+      "type": "float",
+      "default": 1.15,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_texture_freq",
+      "label": "Texture Freq",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_fov_zoom",
+      "label": "Fov Zoom",
+      "type": "float",
+      "default": 0.793,
+      "min": 0.1,
+      "max": 10
+    }
+  ],
+  "textureUrl": null,
+  "snapshot": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAH+AoADASIAAhEBAxEB/8QAGwABAQEBAQEBAQAAAAAAAAAAAAECAwQFBgf/xAA0EAEBAAIABQIEBQMDBAMAAAAAAQIRAxIhMVFBYQQTcZEFIjJSgRRCoVNi4UOCsdGS8PH/xAAaAQEBAQEBAQEAAAAAAAAAAAAAAQIEAwUG/8QAGxEBAQEBAQEBAQAAAAAAAAAAABEBEgIhAzH/2gAMAwEAAhEDEQA/AP6aA+C/UAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJsFE2bSijNyk72Jc8S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"
+}
