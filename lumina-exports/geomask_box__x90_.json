@@ -1,0 +1,22 @@
+{
+  "name": "GeoMask box (x90)",
+  "description": "Live 3D Geometry: box, grid symmetry",
+  "geometryConfig": {
+    "shape": "box",
+    "symmetry": "grid",
+    "wireframe": false,
+    "flatShading": false,
+    "count": 90,
+    "radius": 2.1,
+    "scale": 1,
+    "speed": 1,
+    "pulse": 0,
+    "lineWidth": 1,
+    "viewMode": "perspective",
+    "autoRotate": false,
+    "waveType": "radial",
+    "waveDepth": 4.5,
+    "invert": true
+  },
+  "type": "geometry"
+}
