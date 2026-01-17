@@ -1,0 +1,26 @@
+{
+  "name": "GeoMask box (x102)",
+  "description": "Live 3D Geometry: box, grid symmetry",
+  "geometryConfig": {
+    "shape": "box",
+    "symmetry": "grid",
+    "wireframe": false,
+    "flatShading": true,
+    "count": 102,
+    "radius": 3,
+    "scale": 1,
+    "speed": 1,
+    "pulse": 0,
+    "lineWidth": 1,
+    "viewMode": "orthographic",
+    "autoRotate": false,
+    "waveType": "radial",
+    "waveFunction": "triangle",
+    "waveDepth": 24,
+    "waveSpacing": 4.6,
+    "waveWidth": 5,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
+  },
+  "type": "geometry"
+}
