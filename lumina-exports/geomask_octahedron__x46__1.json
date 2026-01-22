@@ -1,0 +1,25 @@
+{
+  "name": "GeoMask octahedron (x46)",
+  "description": "Live 3D Geometry: octahedron, triGrid symmetry",
+  "geometryConfig": {
+    "shape": "octahedron",
+    "symmetry": "triGrid",
+    "wireframe": false,
+    "flatShading": false,
+    "count": 46,
+    "radius": 2.3,
+    "scale": 0.9,
+    "speed": 0.4,
+    "pulse": 0,
+    "lineWidth": 1,
+    "viewMode": "perspective",
+    "autoRotate": false,
+    "waveType": "linear",
+    "waveDepth": 6.5,
+    "waveSpacing": 5.7,
+    "waveWidth": 0.1,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
+  },
+  "type": "geometry"
+}
