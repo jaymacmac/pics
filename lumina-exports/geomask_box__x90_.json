@@ -5,18 +5,21 @@
     "shape": "box",
     "symmetry": "grid",
     "wireframe": false,
-    "flatShading": false,
+    "flatShading": true,
     "count": 90,
-    "radius": 2.1,
-    "scale": 1,
-    "speed": 1,
+    "radius": 1.7,
+    "scale": 0.8,
+    "speed": 0.5,
     "pulse": 0,
     "lineWidth": 1,
-    "viewMode": "perspective",
+    "viewMode": "orthographic",
     "autoRotate": false,
     "waveType": "radial",
-    "waveDepth": 4.5,
-    "invert": true
+    "waveDepth": 24.5,
+    "waveSpacing": 8.7,
+    "waveWidth": 2.1,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
   },
   "type": "geometry"
 }
