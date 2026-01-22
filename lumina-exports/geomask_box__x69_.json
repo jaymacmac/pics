@@ -16,8 +16,8 @@
     "autoRotate": false,
     "waveType": "linear",
     "waveDepth": 2,
-    "waveSpacing": 0.6,
-    "waveWidth": 4.1,
+    "waveSpacing": 0.5,
+    "waveWidth": 5,
     "backgroundColor": "#000000",
     "objectColor": "#ffffff"
   },
