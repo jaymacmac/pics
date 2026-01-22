@@ -15,9 +15,9 @@
     "viewMode": "perspective",
     "autoRotate": false,
     "waveType": "linear",
-    "waveDepth": 1.5,
-    "waveSpacing": 2.2,
-    "waveWidth": 1.8,
+    "waveDepth": 5,
+    "waveSpacing": 0.6,
+    "waveWidth": 4.1,
     "backgroundColor": "#000000",
     "objectColor": "#ffffff"
   },
