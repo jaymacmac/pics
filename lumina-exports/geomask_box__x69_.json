@@ -1,0 +1,25 @@
+{
+  "name": "GeoMask box (x69)",
+  "description": "Live 3D Geometry: box, triGrid symmetry",
+  "geometryConfig": {
+    "shape": "box",
+    "symmetry": "triGrid",
+    "wireframe": false,
+    "flatShading": false,
+    "count": 69,
+    "radius": 5.9,
+    "scale": 1.5,
+    "speed": 1.4,
+    "pulse": 0,
+    "lineWidth": 1,
+    "viewMode": "perspective",
+    "autoRotate": false,
+    "waveType": "linear",
+    "waveDepth": 2,
+    "waveSpacing": 0.6,
+    "waveWidth": 4.1,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
+  },
+  "type": "geometry"
+}
