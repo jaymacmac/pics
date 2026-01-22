@@ -1,0 +1,25 @@
+{
+  "name": "GeoMask ring (x46)",
+  "description": "Live 3D Geometry: ring, hexGrid symmetry",
+  "geometryConfig": {
+    "shape": "ring",
+    "symmetry": "hexGrid",
+    "wireframe": false,
+    "flatShading": false,
+    "count": 46,
+    "radius": 4,
+    "scale": 1.6,
+    "speed": 0.4,
+    "pulse": 0,
+    "lineWidth": 1,
+    "viewMode": "perspective",
+    "autoRotate": false,
+    "waveType": "linear",
+    "waveDepth": 4.5,
+    "waveSpacing": 5.7,
+    "waveWidth": 0.1,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
+  },
+  "type": "geometry"
+}
