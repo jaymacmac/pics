@@ -1,0 +1,25 @@
+{
+  "name": "GeoMask triangle (x69)",
+  "description": "Live 3D Geometry: triangle, triGrid symmetry",
+  "geometryConfig": {
+    "shape": "triangle",
+    "symmetry": "triGrid",
+    "wireframe": false,
+    "flatShading": true,
+    "count": 69,
+    "radius": 5.9,
+    "scale": 1.6,
+    "speed": 1,
+    "pulse": 0,
+    "lineWidth": 1,
+    "viewMode": "perspective",
+    "autoRotate": false,
+    "waveType": "linear",
+    "waveDepth": 1.5,
+    "waveSpacing": 5.2,
+    "waveWidth": 3.8,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
+  },
+  "type": "geometry"
+}
