@@ -1,9 +1,9 @@
 {
   "name": "GeoMask plane (x69)",
-  "description": "Live 3D Geometry: plane, hexGrid symmetry",
+  "description": "Live 3D Geometry: plane, grid symmetry",
   "geometryConfig": {
     "shape": "plane",
-    "symmetry": "hexGrid",
+    "symmetry": "grid",
     "wireframe": false,
     "flatShading": true,
     "count": 69,
