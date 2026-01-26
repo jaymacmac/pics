@@ -1,0 +1,25 @@
+{
+  "name": "GeoMask sphere (x171)",
+  "description": "Live 3D Geometry: sphere, grid symmetry",
+  "geometryConfig": {
+    "shape": "sphere",
+    "symmetry": "grid",
+    "wireframe": false,
+    "flatShading": true,
+    "count": 171,
+    "radius": 5.5,
+    "scale": 1.3,
+    "speed": 1,
+    "pulse": 0.35,
+    "lineWidth": 1,
+    "viewMode": "orthographic",
+    "autoRotate": false,
+    "waveType": "radial",
+    "waveDepth": 21.5,
+    "waveSpacing": 3.1,
+    "waveWidth": 1,
+    "backgroundColor": "#000000",
+    "objectColor": "#ffffff"
+  },
+  "type": "geometry"
+}
