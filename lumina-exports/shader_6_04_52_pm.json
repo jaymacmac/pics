@@ -1,0 +1,209 @@
+{
+  "name": "Shader-6:04:52 PM",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "uniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\n\n// User Parameters (Preserved and updated for lush green theme)\nuniform float u_speed;\nuniform float u_fov;\nuniform float u_camera_dist;\nuniform float u_glow_intensity;\nuniform float u_complexity; \nuniform float u_viscosity;\nuniform float u_paper_texture;\nuniform float u_metallic_shine;\nuniform float u_bloom_brightness;\nuniform float u_paint_thickness;\nuniform float u_creaminess;\nuniform float u_melting;\nuniform float u_berry_intensity; \nuniform float u_wave_height;\nuniform float u_orange_hue; // Re-purposed for Moss/Emerald Shift\nuniform float u_neon_saturation;\nuniform float u_edge_glow;\nuniform float u_transparency;\nuniform float u_baby_blue_mix; // Re-purposed for Minty/Cyan tint\n\n// Integrated Organic Parameters\nuniform float u_wave_speed;   \nuniform float u_organic_flow;  \nuniform float u_smoothness;    \nuniform float u_fluidity;      \nuniform float u_neural_density;\nuniform float u_foliage_depth; // New parameter for lushness\n\nout vec4 fragColor;\n\n// --- UTILS ---\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\nfloat hash(vec2 p) {\n    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\n}\n\nfloat noise(vec2 p) {\n    vec2 i = floor(p);\n    vec2 f = fract(p);\n    f = f * f * (3.0 - 2.0 * f);\n    float a = hash(i);\n    float b = hash(i + vec2(1.0, 0.0));\n    float c = hash(i + vec2(0.0, 1.0));\n    float d = hash(i + vec2(1.0, 1.0));\n    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);\n}\n\n// Domain warping from the organic logic\nvec2 domainWarp(vec2 p, float t) {\n    float n1 = noise(p + t * 0.2);\n    float n2 = noise(p + vec2(n1, n1) + t * 0.1);\n    return p + vec2(cos(n2 * 6.28), sin(n2 * 6.28)) * u_fluidity * 0.2;\n}\n\n// Organic distortion helper\nvec2 distort(vec2 p, float t) {\n    p += 0.15 * cos(vec2(t + p.y * 1.5, t + p.x * 1.5) * u_organic_flow);\n    p += 0.1 * sin(vec2(t * 1.2 + p.y * 3.0, t * 0.8 + p.x * 3.5));\n    return p;\n}\n\n// Updated Palette for Lush Greens (Forest, Emerald, Lime, Mint)\nvec3 getLushGreenPalette(float t, float mask) {\n    vec3 deepForest = vec3(0.05, 0.2, 0.1) * u_berry_intensity * u_neon_saturation; \n    vec3 emerald    = vec3(0.0, 0.8, 0.3) * u_berry_intensity * u_neon_saturation; \n    vec3 mintyNeon  = vec3(0.6, 1.0, 0.7) * u_neon_saturation;\n    \n    float selector = sin(t * 1.5 + mask * 4.0) * 0.5 + 0.5;\n    \n    // Mix between dark forest and bright emerald\n    vec3 finalCol = mix(deepForest, emerald, smoothstep(0.1, 0.7, selector));\n    \n    // Mix in minty highlights\n    finalCol = mix(finalCol, mintyNeon, smoothstep(0.7, 1.0, selector) * u_baby_blue_mix);\n    \n    // Mossy/Yellowish shift using the old \"orange_hue\" control\n    vec3 mossShift = vec3(0.6, 0.7, 0.1) * u_neon_saturation;\n    finalCol = mix(finalCol, mossShift, (1.0 - selector) * u_orange_hue);\n    \n    // Add depth based on the new foliage parameter\n    finalCol *= (1.0 - u_foliage_depth * 0.5);\n    \n    return finalCol;\n}\n\nvoid main() {\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    vec2 uv_orig = uv;\n    \n    // Zoom control\n    uv *= (3.0 - u_fov); \n    \n    float t = iTime * u_speed * 0.15;\n\n    // Apply Organic Domain Warping\n    uv = domainWarp(uv, t);\n    \n    vec2 p = uv;\n    float flow = 0.0;\n    \n    // Melt effect (slow crawl of vines)\n    p.y -= t * u_melting * 0.25;\n    \n    // Fractal Folding with Organic influence - representing dense foliage structure\n    float waveAmp = u_wave_height;\n    for(float i = 1.0; i <= u_complexity; i++) {\n        p.x += (waveAmp / i) * sin(i * 1.8 * p.y + t + u_viscosity * 4.0);\n        p.y += (waveAmp / i) * cos(i * 1.8 * p.x + t + u_viscosity * 4.0);\n        p *= rot(u_camera_dist * 0.04);\n        flow += length(p - uv);\n    }\n    \n    // Core Distance Field\n    float d = length(sin(p * 0.9)) - 0.45;\n    float mask = smoothstep(1.0 + u_paint_thickness * 0.5, -0.3, d);\n    float edge = exp(-abs(d) * (10.0 - u_edge_glow)) * (u_glow_intensity + 0.5);\n    \n    // Lush Green Palette\n    vec3 baseCol = getLushGreenPalette(flow * 0.12 + t * 0.15, mask);\n    vec3 finalCol = baseCol * mask;\n    finalCol += baseCol * edge * 1.5; \n\n    // Glossy Reflections (Simulating wet leaves/glossy sap)\n    vec3 n = normalize(vec3(dFdx(flow), dFdy(flow), 0.1 / (0.01 + u_wave_height))); \n    vec3 lightDir = normalize(vec3(sin(t * 0.3), 1.0, 1.5));\n    float spec = pow(max(0.0, dot(n, lightDir)), 15.0) * u_metallic_shine;\n    vec3 highlight = vec3(0.9, 1.0, 0.85); // Slightly yellow-white light\n    finalCol += spec * highlight * u_bloom_brightness;\n    \n    // Grain/Dust (Bio-luminescent spores)\n    if (u_paper_texture > 0.0) {\n        float grain = noise(gl_FragCoord.xy * 0.4 + t);\n        float seedPattern = step(0.99 - u_paper_texture * 0.05, noise(p * 20.0 + flow));\n        finalCol += seedPattern * mix(baseCol, highlight, 0.5) * 2.5;\n    }\n\n    // Transparency & Vignette\n    float alpha = clamp(mask + edge * 0.8 + (length(finalCol) * 0.2), 0.0, 1.0) * u_transparency;\n    float vignette = smoothstep(1.6, 0.2, length(uv_orig));\n    finalCol *= vignette;\n    \n    // Slight gamma correction and saturation boost for the greens\n    finalCol = pow(finalCol, vec3(0.9)); \n    fragColor = vec4(finalCol, alpha);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Animation Speed",
+      "type": "float",
+      "default": 2.9,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_fov",
+      "label": "Zoom / Scale",
+      "type": "float",
+      "default": 0.5,
+      "min": 0.5,
+      "max": 2.5
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Pattern Density",
+      "type": "float",
+      "default": 12,
+      "min": 1,
+      "max": 15
+    },
+    {
+      "name": "u_glow_intensity",
+      "label": "Glow Power",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 2
+    },
+    {
+      "name": "u_complexity",
+      "label": "Fractal Iterations",
+      "type": "float",
+      "default": 7,
+      "min": 1,
+      "max": 8
+    },
+    {
+      "name": "u_viscosity",
+      "label": "Ink Viscosity",
+      "type": "float",
+      "default": 0.79,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_paper_texture",
+      "label": "Neon Dust",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 0.3
+    },
+    {
+      "name": "u_metallic_shine",
+      "label": "Paint Gloss",
+      "type": "float",
+      "default": 0.99,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_bloom_brightness",
+      "label": "Highlight Brightness",
+      "type": "float",
+      "default": 1.7,
+      "min": 0,
+      "max": 2
+    },
+    {
+      "name": "u_paint_thickness",
+      "label": "Core Thickness",
+      "type": "float",
+      "default": 0.61,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_creaminess",
+      "label": "Color Swirls",
+      "type": "float",
+      "default": 0.04,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_melting",
+      "label": "Melt Factor",
+      "type": "float",
+      "default": 0.79,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_berry_intensity",
+      "label": "Color Intensity",
+      "type": "float",
+      "default": 1.5,
+      "min": 0.5,
+      "max": 2
+    },
+    {
+      "name": "u_wave_height",
+      "label": "Wave Height",
+      "type": "float",
+      "default": 0.1,
+      "min": 0,
+      "max": 2
+    },
+    {
+      "name": "u_orange_hue",
+      "label": "Moss/Emerald Shift",
+      "type": "float",
+      "default": 0.83,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_neon_saturation",
+      "label": "Neon Saturation",
+      "type": "float",
+      "default": 0.6,
+      "min": 0,
+      "max": 2.5
+    },
+    {
+      "name": "u_edge_glow",
+      "label": "Edge Glow Width",
+      "type": "float",
+      "default": 4.3,
+      "min": 1,
+      "max": 9.5
+    },
+    {
+      "name": "u_transparency",
+      "label": "Overall Transparency",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_baby_blue_mix",
+      "label": "Minty Tint",
+      "type": "float",
+      "default": 0.96,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_wave_speed",
+      "label": "Neural Wave Speed",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 2
+    },
+    {
+      "name": "u_organic_flow",
+      "label": "Organic Flow Strength",
+      "type": "float",
+      "default": 2.2,
+      "min": 0,
+      "max": 3
+    },
+    {
+      "name": "u_smoothness",
+      "label": "Line Smoothness",
+      "type": "float",
+      "default": 0.3,
+      "min": 0.1,
+      "max": 3
+    },
+    {
+      "name": "u_fluidity",
+      "label": "Domain Warp Fluidity",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 4
+    },
+    {
+      "name": "u_neural_density",
+      "label": "Neural Path Density",
+      "type": "float",
+      "default": 0.4,
+      "min": 0.1,
+      "max": 3
+    },
+    {
+      "name": "u_foliage_depth",
+      "label": "Forest Depth",
+      "type": "float",
+      "default": 0.5,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "textures": {},
+  "snapshot": "data:image/jpeg;base64,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"
+}
