@@ -1,0 +1,145 @@
+{
+  "name": "Shader-22:16:21",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\nuniform sampler2D iChannel0;\n\n// User Parameters\nuniform float u_speed;\nuniform float u_scale;\nuniform float u_sparkle;\nuniform float u_glow;\nuniform float u_hue;   \nuniform float u_hue2;  \n\n// AI Aesthetic Parameters\nuniform float u_neuro_complexity; \nuniform float u_chromatic_aberration; \nuniform float u_bass; \nuniform float u_glitch_intensity; \n\n// \"Mad\" Parameters\nuniform float u_rage_intensity; \nuniform float u_distortion_warp; \n\n// Stretchy Blob Parameters\nuniform float u_stretch_amount;\nuniform float u_blob_viscosity;\n\n// New Smoothness Parameter\nuniform float u_smoothness;\n\n// Ethereal Gold/Sunset Parameters\nuniform float u_metallic;\nuniform float u_ethereal_mist;\nuniform float u_sunset_bloom;\n\nout vec4 fragColor;\n\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\nfloat hash(float n) {\n    return fract(sin(n) * 43758.5453123);\n}\n\n// Seamless FBM using a noise function that doesn't rely on mod(iTime) directly\nfloat fbm(vec2 p, float rage, float bassParam, float time) {\n    float v = 0.0;\n    float a = 0.5;\n    vec2 shift = vec2(100.0);\n    for (int i = 0; i < 4; ++i) {\n        v += a * (sin(p.x + time * 0.1) + cos(p.y - time * 0.1));\n        p = rot(0.5 + rage * 0.2) * p * (1.8 + bassParam * 0.5) + shift;\n        a *= 0.5;\n    }\n    return v;\n}\n\nvec3 hsb2rgb(vec3 c) {\n    // Smoothed HSB to RGB to prevent banding during fast hue shifts\n    vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);\n    rgb = rgb * rgb * (3.0 - 2.0 * rgb);\n    return c.z * mix(vec3(1.0), rgb, c.y);\n}\n\nvoid main() {\n    // --- SETTINGS FIXED TO YOUR PARAMS ---\n    float speed = (u_speed <= 0.001) ? 0.0 : u_speed * 0.1; \n    float scale = (u_scale <= 0.1) ? 0.9 : u_scale;\n    float sparkleInt = u_sparkle; \n    float glowInt = u_glow;\n    \n    // Shift base hues toward Sunset Orange/Red (Hues 0.0 to 0.1 are red-orange)\n    float hue1 = u_hue;\n    float hue2 = u_hue2;\n    \n    float neuro = u_neuro_complexity; \n    float caParam = u_chromatic_aberration;\n    float bass = (u_bass > 0.0) ? u_bass : 0.0;\n    float glitch = u_glitch_intensity;\n    float rage = u_rage_intensity;\n    float warp = u_distortion_warp;\n\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    vec2 uv0 = uv;\n    \n    float time = iTime * speed;\n\n    // Apply \"Stretchy\" blooming effect to UVs over time\n    float stretchCycle = sin(time * 0.5) * 0.5 + 0.5;\n    float stretchFactor = 1.0 + stretchCycle * u_stretch_amount;\n    uv *= mix(1.0, 1.0 / stretchFactor, length(uv) * u_blob_viscosity);\n\n    // Smooth Shake\n    if (rage > 0.01) {\n        vec2 shake = vec2(sin(iTime * 20.0), cos(iTime * 17.0)) * rage * 0.005;\n        uv += shake;\n    }\n\n    // Glitch logic\n    if (glitch > 0.01) {\n        float sliceY = floor(uv.y * 20.0);\n        float glitchChance = fract(sin(sliceY * 12.9898) * 43758.5453);\n        if (glitchChance > 0.98 - glitch * 0.05) {\n            uv.x += (sin(iTime * 50.0 + sliceY) * 0.02) * glitch;\n        }\n    }\n\n    // Fluid background\n    float fluid = fbm(uv * (2.0 + warp) - time * 0.2, rage, bass, time) * (neuro + rage);\n    uv += fluid * (0.05 + warp * 0.05 + stretchCycle * 0.1);\n\n    // Sunset theme background: deep reds and burning oranges\n    vec3 sunsetBase = vec4(0.4, 0.05, 0.02, 1.0).rgb; // Deep sunset crimson base\n    vec3 bgCol = hsb2rgb(vec3(mix(hue1, hue2, 0.5), mix(0.8, 1.0, rage), 0.02 + max(fluid, 0.0) * 0.05));\n    bgCol = mix(bgCol, sunsetBase, 0.6);\n    vec3 finalColor = bgCol;\n\n    const int LAYERS = 12;\n    \n    for (int i = 0; i < LAYERS; i++) {\n        float fi = float(i);\n        float progress = fi / float(LAYERS);\n        float z = fract(progress - time * 0.1);\n        \n        float fade = smoothstep(0.0, 0.25 * u_smoothness, z) * smoothstep(1.0, 0.75 / u_smoothness, z);\n        float layerScale = mix(20.0, 1.0, 1.0 - z) / (scale * mix(1.0, stretchFactor, 0.5));\n        vec2 p = uv * layerScale;\n        \n        p *= rot(z * warp * 2.0 + time * 0.05 + fi);\n        float stretchOsc = sin(time * 0.8 + fi) * u_stretch_amount * 0.2;\n        p += vec2(sin(p.y * 0.5 + time * 0.5 + stretchOsc), cos(p.x * 0.5 - time * 0.5 - stretchOsc)) * (0.5 + stretchCycle);\n        \n        float ca = (caParam + rage * 0.5) * 0.2 * (1.0 - z);\n        float dR = length(sin(p - ca));\n        float dG = length(sin(p));\n        float dB = length(sin(p + ca));\n        \n        float radius = 0.4 * (1.0 + bass * 0.8 + stretchCycle * 0.3);\n        \n        float coreR = smoothstep(radius + 0.1, radius - 0.1, dR);\n        float coreG = smoothstep(radius + 0.1, radius - 0.1, dG);\n        float coreB = smoothstep(radius + 0.1, radius - 0.1, dB);\n        \n        float glowSharpness = 8.0 / (glowInt + 0.001); \n        float glowR = exp(-abs(dR - radius) * glowSharpness) * glowInt * (1.0 + rage);\n        float glowG = exp(-abs(dG - radius) * glowSharpness) * glowInt;\n        float glowB = exp(-abs(dB - radius) * glowSharpness) * glowInt;\n        \n        float hueOsc = sin(time * 0.2 + progress * 6.283) * 0.5 + 0.5;\n        float layerHue = mix(hue1, hue2, hueOsc);\n        \n        if (rage > 0.01) {\n            float rageHueShift = sin(time * 2.0 + fi) * 0.05; // Tighten range for fiery effect\n            layerHue = mix(layerHue, rageHueShift, rage * 0.4); \n        }\n        \n        // Convert to sunset palette (high saturation reds, oranges, yellows)\n        vec3 col = hsb2rgb(vec3(layerHue, mix(0.7, 1.0, rage + bass), 1.0));\n        \n        // Add \"Metallic\" reflection logic - sunset version (burnished copper/gold)\n        float metal = pow(max(0.0, sin(p.x + p.y + time)), 4.0) * u_metallic;\n        col = mix(col, vec3(1.0, 0.7, 0.3), metal); \n\n        vec3 layerColor = vec3(0.0);\n        layerColor.r += col.r * (glowR + coreR * 0.4);\n        layerColor.g += col.g * (glowG * 0.8 + coreG * 0.2); // Dim green for deeper oranges\n        layerColor.b += col.b * (glowB * 0.4 + coreB * 0.1); // Dim blue for fiery look\n        \n        float sparkVal = max(0.0, sin(p.x * 8.0 + time * 0.5) * sin(p.y * 8.0 - time * 0.7));\n        sparkVal = pow(sparkVal, 15.0) * sparkleInt * 8.0;\n        \n        // Fiery sunset sparkles\n        vec3 sparkleCol = mix(vec3(1.0, 0.8, 0.4), col, 0.3);\n        layerColor += sparkleCol * sparkVal * (glowR + 0.5); \n        \n        finalColor += layerColor * fade * (1.5 - z);\n    }\n\n    // Add Sunset Mist (Warm Fog/Atmosphere)\n    float mist = fbm(uv0 * 2.5 + time * 0.1, 0.0, bass, time * 0.5);\n    vec3 mistCol = mix(vec3(1.0, 0.3, 0.1), vec3(0.8, 0.5, 0.0), sin(time)*0.5+0.5);\n    finalColor += mistCol * mist * u_ethereal_mist * 0.5;\n\n    // Bloom over the center for that \"staring at the sun\" feel\n    float bloom = exp(-length(uv0) * 1.5) * u_sunset_bloom;\n    finalColor += vec3(1.0, 0.4, 0.1) * bloom;\n\n    // Vignette - darkened but keeping warm\n    finalColor *= (1.2 + rage * 0.5) - length(uv0) * (0.8 + rage * 0.6 + stretchCycle * 0.2);\n    \n    // Final clamp and sunset contrast adjustment\n    finalColor = pow(max(finalColor, 0.0), vec3(0.85 - rage * 0.3)); \n    // Tint the final shadows deeper red/purple\n    finalColor += vec3(0.08, 0.02, 0.05) * (1.0 - length(uv0));\n    \n    finalColor = smoothstep(-0.02, 1.1 + rage * 0.5 + stretchCycle * 0.1, finalColor);\n\n    fragColor = vec4(finalColor, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Speed",
+      "type": "float",
+      "default": 2.2,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_scale",
+      "label": "Scale",
+      "type": "float",
+      "default": 1.2,
+      "min": 0.1,
+      "max": 10
+    },
+    {
+      "name": "u_sparkle",
+      "label": "Sparkle",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_glow",
+      "label": "Glow",
+      "type": "float",
+      "default": 0.7,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_hue",
+      "label": "Hue",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_hue2",
+      "label": "Hue2",
+      "type": "float",
+      "default": 0.59,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_neuro_complexity",
+      "label": "Neuro Complexity",
+      "type": "float",
+      "default": 0,
+      "min": -5,
+      "max": 5
+    },
+    {
+      "name": "u_chromatic_aberration",
+      "label": "Chromatic Aberration",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_glitch_intensity",
+      "label": "Glitch Intensity",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_rage_intensity",
+      "label": "Rage Intensity",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_distortion_warp",
+      "label": "Distortion Warp",
+      "type": "float",
+      "default": 2,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "name": "u_stretch_amount",
+      "label": "Stretch Amount",
+      "type": "float",
+      "default": 4.8,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_blob_viscosity",
+      "label": "Blob Viscosity",
+      "type": "float",
+      "default": 0.6,
+      "min": 0.1,
+      "max": 2
+    },
+    {
+      "name": "u_smoothness",
+      "label": "Loop Smoothness",
+      "type": "float",
+      "default": 2,
+      "min": 0.1,
+      "max": 2
+    },
+    {
+      "name": "u_metallic",
+      "label": "Gold Metallic",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_ethereal_mist",
+      "label": "Ethereal Mist",
+      "type": "float",
+      "default": 0.43,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_sunset_bloom",
+      "label": "Sunset Bloom",
+      "type": "float",
+      "default": 0.4,
+      "min": 0,
+      "max": 2
+    }
+  ],
+  "textures": {},
+  "snapshot": "data:image/jpeg;base64,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"
+}
