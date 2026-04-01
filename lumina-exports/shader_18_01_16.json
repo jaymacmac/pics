@@ -1,0 +1,137 @@
+{
+  "name": "Shader-18:01:16",
+  "prompt": "Procedural Shader Snapshot",
+  "code": "\n\nuniform float iTime;\nuniform vec2 iResolution;\nuniform vec4 iMouse;\n\n// --- ASSETS ---\nuniform sampler2D iChannel0; \nuniform sampler2D iChannel1; \n\n// --- STANDARD CONTROLS ---\nuniform float u_speed;\nuniform float u_camera_dist; \nuniform float u_fov;\nuniform float u_glow_intensity;\n\n// --- VISUAL CONTROLS ---\nuniform float u_turbulence_strength;\nuniform float u_cloud_height; \nuniform float u_color_shift;\nuniform float u_density_factor;\nuniform float u_tunnel_twist; \nuniform float u_exit_light_size; \nuniform float u_exit_light_bright; \n\n// --- ETHEREAL CONTROLS ---\nuniform float u_ethereal_bloom;\nuniform float u_dither_strength; \nuniform float u_cloud_detail;\nuniform float u_cloud_wisps;\nuniform float u_amber_hue; // New parameter for orange/amber warmth\n\nout vec4 fragColor;\n\n// --- LUMINA MATH LIB ---\n#define PI 3.14159265359\n\nmat2 rot(float a) {\n    float s = sin(a), c = cos(a);\n    return mat2(c, -s, s, c);\n}\n\nfloat hash12(vec2 p) {\n\tvec3 p3  = fract(vec3(p.xyx) * .1031);\n    p3 += dot(p3, p3.yzx + 33.33);\n    return fract((p3.x + p3.y) * p3.z);\n}\n\n// Fractal Noise for \"Nicer\" Cloud Texturing\nfloat noise(vec3 p) {\n    vec3 i = floor(p);\n    vec3 f = fract(p);\n    f = f * f * (3.0 - 2.0 * f);\n    \n    vec2 uv = (i.xy + vec2(37.0, 17.0) * i.z);\n    vec2 rg = textureLod(iChannel0, (uv + 0.5) / 256.0, 0.0).yx;\n    return mix(rg.x, rg.y, f.z);\n}\n\nfloat fbm(vec3 p) {\n    float v = 0.0;\n    float a = 0.5;\n    mat3 m = mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64);\n    for (int i = 0; i < 4; i++) {\n        v += a * noise(p);\n        p = m * p * 2.02;\n        a *= 0.5;\n    }\n    return v;\n}\n\nvoid main() {\n    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;\n    vec3 rd = normalize(vec3(uv, 1.0 / u_fov)); \n    \n    float t = iTime * u_speed;\n    vec4 col = vec4(0.0);\n    \n    float dither = hash12(gl_FragCoord.xy) * u_dither_strength;\n    float dist = u_camera_dist + dither; \n    \n    float stepSize = 0.0;\n    \n    for(int i = 0; i < 80; i++) {\n        vec3 p = dist * rd;\n        p.z += t; \n        \n        p.xy *= rot(p.z * u_tunnel_twist + t * 0.05);\n        \n        // Enhance cloud structure with layered distortion\n        float scale = 1.8;\n        float noiseVal = 0.0;\n        for(int j = 0; j < 3; j++) {\n            p += u_turbulence_strength * 0.5 * sin(p.yzx * scale + t * 0.15) / scale;\n            scale *= 1.8; \n        }\n\n        // Add fine detail wisps\n        float wisps = sin(p.x * 4.0 + t) * cos(p.y * 4.0 - t) * u_cloud_wisps;\n        \n        float radius = u_cloud_height * 2.0 + wisps;\n        float tunnelDist = length(p.xy) - radius;\n        \n        // Volumetric density variation using FBM for \"nicer\" clouds\n        float detail = fbm(p * 0.5) * u_cloud_detail;\n        tunnelDist -= detail * 0.6;\n        \n        float stepFactor = max(abs(tunnelDist), 0.02);\n        stepSize = stepFactor * 0.45; \n        dist += stepSize;\n        \n        float angle = atan(p.y, p.x);\n        \n        // --- UPDATED COLORS TO ETHEREAL ORANGE ---\n        // Shifting from forest/teal to amber/gold/crimson\n        vec3 emberBase   = vec3(0.5, 0.15, 0.02); // Deep Crimson/Amber\n        vec3 goldBase    = vec3(1.0, 0.6, 0.1) * u_amber_hue;  // Bright Gold\n        vec3 orangeBase  = vec3(1.0, 0.4, 0.05); // Rich Orange\n        \n        float mixVal = sin(p.z * 0.3 + angle + u_color_shift * PI * 2.0) * 0.5 + 0.5;\n        vec3 baseColor = mix(emberBase, mix(goldBase, orangeBase, sin(t * 0.4) * 0.5 + 0.5), mixVal);\n        \n        // Softer glow falloff for cloud-like feel\n        float glow = exp(-abs(tunnelDist) * (8.0 / u_density_factor));\n        \n        // Higher density in the core of the cloud\n        float density = smoothstep(0.5, 0.0, abs(tunnelDist));\n        \n        float attenuation = 1.0 / (1.0 + dist * 0.12);\n        col.rgb += baseColor * (glow + density * 0.5) * (u_glow_intensity * 0.12) * attenuation * stepSize;\n        \n        if(col.a > 0.99 || dist > 35.0) break;\n    }\n    \n    // Light at the end (Warm Solar glow)\n    float distToCenter = length(uv);\n    float exitGlow = pow(max(0.0, 1.0 - distToCenter / u_exit_light_size), 4.0);\n    vec3 exitColor = vec3(1.0, 0.9, 0.7) * exitGlow * u_exit_light_bright;\n    \n    vec3 finalCol = col.rgb + exitColor;\n    \n    // Ethereal Bloom (Orange/Fire shift)\n    finalCol += (vec3(1.0, 0.5, 0.2) * u_ethereal_bloom * 0.25) / (1.0 + distToCenter * 3.0);\n    \n    // Tone mapping\n    finalCol = smoothstep(-0.05, 1.3, finalCol);\n    finalCol = pow(finalCol, vec3(0.9)); \n    \n    // Soft Vignette (Warmer tint)\n    float mask = smoothstep(1.2, 0.4, length(uv));\n    finalCol *= mask;\n    \n    fragColor = vec4(finalCol, 1.0);\n}",
+  "parameters": [
+    {
+      "name": "u_speed",
+      "label": "Travel Speed",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_camera_dist",
+      "label": "Start Depth",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_fov",
+      "label": "Fov",
+      "type": "float",
+      "default": 2,
+      "min": 0.1,
+      "max": 2
+    },
+    {
+      "name": "u_glow_intensity",
+      "label": "Glow Brightness",
+      "type": "float",
+      "default": 1.9,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_turbulence_strength",
+      "label": "Wall Distortion",
+      "type": "float",
+      "default": 3.7,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "name": "u_cloud_height",
+      "label": "Tunnel Radius",
+      "type": "float",
+      "default": 0.1,
+      "min": 0.1,
+      "max": 2
+    },
+    {
+      "name": "u_color_shift",
+      "label": "Color Cycle",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_density_factor",
+      "label": "Edge Softness",
+      "type": "float",
+      "default": 5,
+      "min": 0.1,
+      "max": 5
+    },
+    {
+      "name": "u_tunnel_twist",
+      "label": "Tunnel Twist",
+      "type": "float",
+      "default": 1,
+      "min": -1,
+      "max": 1
+    },
+    {
+      "name": "u_exit_light_size",
+      "label": "Exit Light Size",
+      "type": "float",
+      "default": 0.1,
+      "min": 0.1,
+      "max": 2
+    },
+    {
+      "name": "u_exit_light_bright",
+      "label": "Exit Light Brightness",
+      "type": "float",
+      "default": 2.3,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "name": "u_ethereal_bloom",
+      "label": "Ethereal Bloom",
+      "type": "float",
+      "default": 2,
+      "min": 0,
+      "max": 2
+    },
+    {
+      "name": "u_dither_strength",
+      "label": "Banding Smoothness",
+      "type": "float",
+      "default": 0.5,
+      "min": 0,
+      "max": 0.5
+    },
+    {
+      "name": "u_cloud_detail",
+      "label": "Cloud Detail",
+      "type": "float",
+      "default": 0.33,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_cloud_wisps",
+      "label": "Wispiness",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "u_amber_hue",
+      "label": "Amber Warmth",
+      "type": "float",
+      "default": 0.8,
+      "min": 0,
+      "max": 2
+    }
+  ],
+  "textures": {},
+  "snapshot": "data:image/jpeg;base64,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"
+}
